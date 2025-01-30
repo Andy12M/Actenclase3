@@ -1,27 +1,51 @@
-name: Build
+name: Build, Test, and Analyze
 
 on:
   push:
     branches:
       - main
-
+  pull_request:
+    branches:
+      - main
 
 jobs:
-  build:
-    name: Build and analyze
+  build-and-test:
+    name: Build, Test, and Analyze
     runs-on: ubuntu-latest
-    
+
     steps:
-      - uses: actions/checkout@v4
+      # 1. Clonar el repositorio
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
-      - uses: sonarsource/sonarqube-scan-action@v3
+          fetch-depth: 0  # Necesario para un análisis más preciso en SonarQube
+
+      # 2. Instalar dependencias necesarias
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential
+
+      # 3. Configurar, compilar y ejecutar las pruebas
+      - name: Configure, Build, and Test
+        run: |
+          mkdir build
+          cd build
+          cmake .. -DENABLE_TESTING=ON
+          cmake --build .
+          ctest --output-on-failure 
+
+      # 4. Ejecutar el análisis con SonarQube
+      - name: SonarQube Scan
+        uses: sonarsource/sonarqube-scan-action@v3
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-      # If you wish to fail your job when the Quality Gate is red, uncomment the
-      # following lines. This would typically be used to fail a deployment.
-      # - uses: sonarsource/sonarqube-quality-gate-action@master
+
+      # 5. (Opcional) Falla el workflow si la calidad del código no pasa el Quality Gate
+      # Descomentar si quieres que el workflow falle cuando SonarQube detecte problemas graves.
+      # - name: SonarQube Quality Gate
+      #   uses: sonarsource/sonarqube-quality-gate-action@master
       #   timeout-minutes: 5
       #   env:
       #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
