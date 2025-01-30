@@ -1,4 +1,4 @@
-name: Build and Test
+name: Build and Test with SonarQube
 
 on:
   push:
@@ -10,25 +10,50 @@ on:
 
 jobs:
   build-and-test:
-    name: Build and Run Tests
+    name: Build, Test and Analyze
     runs-on: ubuntu-latest
 
     steps:
-    # 1. Clonar el repositorio
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      # 1. Clonar el repositorio
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Requerido para SonarQube
 
-    # 2. Instalar dependencias necesarias
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y cmake build-essential
+      # 2. Instalar dependencias necesarias
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential lcov
 
-    # 3. Configurar, compilar y ejecutar las pruebas
-    - name: Configure, Build, and Test
-      run: |
-        mkdir build
-        cd build
-        cmake .. -DENABLE_TESTING=ON
-        cmake --build .
-        ctest --output-on-failure
+      # 3. Configurar, compilar y ejecutar las pruebas unitarias
+      - name: Configure, Build, and Test
+        run: |
+          mkdir build
+          cd build
+          cmake .. -DENABLE_TESTING=ON
+          cmake --build .
+          ctest --output-on-failure
+
+      # 4. Generar reporte de cobertura de código
+      - name: Generate code coverage report
+        run: |
+          cd build
+          lcov --capture --directory . --output-file coverage.info
+          lcov --remove coverage.info '/usr/*' '*/tests/*' --output-file coverage_filtered.info
+          lcov --list coverage_filtered.info
+
+      # 5. Subir el análisis a SonarQube
+      - name: Run SonarQube Scan
+        uses: sonarsource/sonarqube-scan-action@v3
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+      # 6. (Opcional) Verificar la Quality Gate en SonarQube
+      - name: Check SonarQube Quality Gate
+        uses: sonarsource/sonarqube-quality-gate-action@master
+        timeout-minutes: 5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
